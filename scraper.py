@@ -189,4 +189,4 @@ def _clean_price_generic(text):
     except: return 0.0
 
 def is_wishlist(url):
-    return "wishlist" in url or "registry" in url
+    return "wishlist" in url or "registry" in url 
