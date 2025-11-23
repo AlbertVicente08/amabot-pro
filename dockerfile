@@ -1,11 +1,13 @@
-# Usamos Python oficial
+# Usamos Python 3.10 ligero
 FROM python:3.10-slim
 
-# 1. Instalar dependencias del sistema necesarias para Playwright
-# Esta lista es la oficial de Microsoft para que Chrome funcione en Linux
+# 1. INSTALAR HERRAMIENTAS DE SISTEMA (CRÍTICO)
+# Añadimos 'build-essential' y 'python3-dev' para poder compilar las librerías que fallaban
 RUN apt-get update && apt-get install -y \
     wget \
     gnupg \
+    build-essential \
+    python3-dev \
     libglib2.0-0 \
     libnss3 \
     libnspr4 \
@@ -35,10 +37,11 @@ WORKDIR /app
 COPY . .
 
 # 4. Instalar librerías de Python
+# Actualizamos pip primero para evitar errores viejos
+RUN pip install --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 5. INSTALAR NAVEGADORES (Aquí está la clave)
-# Esto descarga el navegador exacto que pide la librería
+# 5. Instalar navegador Chromium para el bot
 RUN playwright install chromium
 
 # 6. Arrancar
