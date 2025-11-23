@@ -5,7 +5,7 @@ import random
 import io
 import matplotlib.pyplot as plt
 import traceback
-from urllib.parse import urlparse, urlunparse
+from urllib.parse import urlparse, urlunparse, parse_qsl, urlencode
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, BufferedInputFile
@@ -18,9 +18,8 @@ import scraper
 TOKEN = "8570507078:AAHXOnOxZW5RG1TQFwbl76omrMkQTJlENW4"
 ADMIN_ID = 123456789
 
-# CANAL PÚBLICO (PÚBLICO Y SIN EMOJIS)
-PUBLIC_CHANNEL = "@ChollosVipAmazon"  
-MIN_DISCOUNT_TO_POST = 30         
+PUBLIC_CHANNEL = "@ChollosVipAmazon"
+MIN_DISCOUNT_TO_POST = 30
 
 AFFILIATE_TAGS = {
     "amazon.es": "berto010708-21",       
@@ -30,7 +29,7 @@ AFFILIATE_TAGS = {
     "amazon.it": "berto010700f7-21",
     "amazon.fr": "berto01070807-21"
 }
-# =========================================================
+# ================================================
 
 logging.basicConfig(level=logging.INFO)
 bot = Bot(token=TOKEN)
@@ -40,13 +39,22 @@ plt.switch_backend('Agg')
 
 # --- UTILS ---
 def monetizar_url(url):
+    """
+    Añade el tag de afiliado de forma segura conservando otros parámetros.
+    """
     try:
         parsed = urlparse(url)
         domain = parsed.netloc.replace("www.", "")
         tag = AFFILIATE_TAGS.get(domain)
         if not tag: return url
-        new_query = f"tag={tag}"
-        return urlunparse((parsed.scheme, parsed.netloc, parsed.path, '', new_query, ''))
+        
+        # Obtenemos parámetros actuales y añadimos el tag
+        query_params = dict(parse_qsl(parsed.query))
+        query_params["tag"] = tag
+        
+        # Reconstruimos URL
+        new_query = urlencode(query_params)
+        return urlunparse((parsed.scheme, parsed.netloc, parsed.path, parsed.params, new_query, parsed.fragment))
     except: return url
 
 def generar_barra(progreso, total=10):
@@ -114,9 +122,10 @@ async def check_price_updates():
         prod_id, user_id, url, name, last_price, historic_min, image_url = prod
         
         try:
+            # Scraper devuelve 7 valores ahora (con final_url)
             data = await asyncio.wait_for(scraper.get_amazon_price(url), timeout=40)
             if not data: continue
-            _, new_price, _, _, currency, _ = data
+            _, new_price, _, _, currency, _, final_url = data # Usamos final_url para monetizar si ha cambiado
         except Exception as e:
             print(f"⚠️ Skip {url}: {e}")
             continue
@@ -128,15 +137,13 @@ async def check_price_updates():
                 if last_price == 0: last_price = new_price + 1
                 pct = int(((last_price - new_price) / last_price) * 100)
                 txt_rec = "🏆 <b>¡MÍNIMO HISTÓRICO!</b>" if new_price < historic_min else ""
-                link = monetizar_url(url)
+                link = monetizar_url(final_url) # Monetizamos la URL final resuelta
                 safe_name = html.escape(name)
 
                 print(f"🚨 BAJADA DETECTADA: {name[:10]}... (-{pct}%)")
+                legal_footer = "\n<i>⚠️ Precios sujetos a cambios en Amazon.</i>"
 
-                # DISCLAIMER LEGAL (Obligatorio)
-                legal_footer = "\n<i>⚠️ Precios y disponibilidad sujetos a cambios en Amazon.</i>"
-
-                # AVISO PRIVADO
+                # PRIVADO
                 caption_private = (
                     f"🚨 <b>BAJADA DETECTADA</b> 🚨\n\n"
                     f"📦 <b>{safe_name[:40]}...</b>\n"
@@ -145,12 +152,10 @@ async def check_price_updates():
                     f"👉 <a href='{link}'>APROVECHAR OFERTA</a>"
                     f"{legal_footer}"
                 )
-                
                 kb_private = InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="📊 Ver Gráfica", callback_data=f"chart_{prod_id}")],
                     [InlineKeyboardButton(text="🛒 COMPRAR", url=link)]
                 ])
-
                 try:
                     if image_url and "http" in image_url:
                         await bot.send_photo(user_id, photo=image_url, caption=caption_private, parse_mode="HTML", reply_markup=kb_private)
@@ -158,7 +163,7 @@ async def check_price_updates():
                         await bot.send_message(user_id, caption_private, parse_mode="HTML", reply_markup=kb_private)
                 except: pass
 
-                # BROADCAST
+                # PÚBLICO
                 if pct >= MIN_DISCOUNT_TO_POST:
                     caption_public = (
                         f"🔥 <b>¡CHOLLAZO DETECTADO! -{pct}%</b> 🔥\n\n"
@@ -168,19 +173,13 @@ async def check_price_updates():
                         f"👉 <a href='{link}'>VER EN AMAZON</a>"
                         f"{legal_footer}"
                     )
-                    
-                    kb_public = InlineKeyboardMarkup(inline_keyboard=[
-                        [InlineKeyboardButton(text=f"🛒 COMPRAR AHORA ({new_price}{currency})", url=link)]
-                    ])
-                    
+                    kb_public = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=f"🛒 COMPRAR AHORA ({new_price}{currency})", url=link)]])
                     try:
-                        print(f"📢 Publicando en {PUBLIC_CHANNEL}...")
                         if image_url and "http" in image_url:
                             await bot.send_photo(chat_id=PUBLIC_CHANNEL, photo=image_url, caption=caption_public, parse_mode="HTML", reply_markup=kb_public)
                         else:
                             await bot.send_message(chat_id=PUBLIC_CHANNEL, text=caption_public, parse_mode="HTML", reply_markup=kb_public)
-                    except Exception as e:
-                        print(f"❌ Error publicando: {e}")
+                    except Exception as e: print(f"❌ Error canal: {e}")
 
 # --- COMANDOS ---
 @dp.message(Command("start"))
@@ -188,13 +187,7 @@ async def cmd_start(message: types.Message):
     await database.init_db()
     await database.add_user(message.from_user.id, html.escape(message.from_user.first_name))
     kb = InlineKeyboardMarkup(inline_keyboard=get_main_buttons())
-    
-    # TEXTO LEGAL OBLIGATORIO DE AMAZON
-    legal_text = (
-        "\n\n⚖️ <i>En calidad de Afiliado de Amazon, obtengo ingresos por las compras adscritas que cumplen los requisitos aplicables. "
-        "El precio final es el mismo para ti.</i>"
-    )
-    
+    legal_text = "\n\n⚖️ <i>Afiliado de Amazon: Gano ingresos por compras adscritas.</i>"
     await message.answer(
         f"👋 <b>¡Hola! Soy Amabot.</b>\n\n"
         "1️⃣ Envíame un enlace o Wishlist.\n"
@@ -216,7 +209,7 @@ async def cb_top(c: CallbackQuery):
 
 @dp.callback_query(F.data == "cmd_help")
 async def cb_help(c: CallbackQuery):
-    await c.message.answer("❓ Pega el link de Amazon. Uso enlaces de afiliado para mantener el bot gratis.", parse_mode="HTML")
+    await c.message.answer("❓ Pega el link de Amazon.", parse_mode="HTML")
     await c.answer()
 
 @dp.callback_query(F.data.startswith("del_"))
@@ -228,6 +221,18 @@ async def cb_del(c: CallbackQuery):
         await c.answer("🗑️ Eliminado")
     except: await c.answer("Error")
 
+# --- NUEVO: BORRAR TODO ---
+@dp.callback_query(F.data == "del_all")
+async def cb_del_all(c: CallbackQuery):
+    try:
+        await database.delete_all_products(c.from_user.id)
+        # Volvemos al menú principal
+        kb = InlineKeyboardMarkup(inline_keyboard=get_main_buttons())
+        await c.message.edit_text("🗑️ <b>Todos tus productos han sido borrados.</b>", parse_mode="HTML", reply_markup=kb)
+    except Exception as e:
+        print(e)
+        await c.answer("Error borrando")
+
 @dp.callback_query(F.data.startswith("chart_"))
 async def cb_chart(c: CallbackQuery):
     try:
@@ -238,7 +243,7 @@ async def cb_chart(c: CallbackQuery):
             photo = BufferedInputFile(buf.read(), filename="chart.png")
             await c.message.answer_photo(photo, caption="📊 <b>Historial de Precios</b>", parse_mode="HTML")
         else:
-            await c.message.answer("📉 <b>Faltan datos para la gráfica.</b>", parse_mode="HTML")
+            await c.message.answer("📉 <b>Faltan datos.</b>", parse_mode="HTML")
     except: await c.answer("Error")
 
 # --- VISUALES ---
@@ -251,7 +256,11 @@ async def show_user_items(user_id, message_obj):
         await message_obj.answer("📭 <b>Vacío.</b>", parse_mode="HTML", reply_markup=kb)
         return
 
-    await message_obj.answer(f"🎒 <b>TUS PRODUCTOS ({len(items)})</b>", parse_mode="HTML")
+    # Botón BORRAR TODO al principio
+    kb_borrar_todo = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🗑️ BORRAR TODO MI RASTREO", callback_data="del_all")]
+    ])
+    await message_obj.answer(f"🎒 <b>TUS PRODUCTOS ({len(items)})</b>", parse_mode="HTML", reply_markup=kb_borrar_todo)
     
     for item in items[:5]: 
         safe_name = html.escape(item['product_name'])
@@ -261,7 +270,7 @@ async def show_user_items(user_id, message_obj):
             [InlineKeyboardButton(text="🔗 Amazon", url=link),
              InlineKeyboardButton(text="🗑️ Borrar", callback_data=f"del_{item['id']}")]
         ])
-        txt = f"🔹 <b>{safe_name[:35]}...</b>\n💰 <b>{item['current_price']}€</b> (Meta: {item['target_price']}€)"
+        txt = f"🔹 <b>{safe_name[:35]}...</b>\n💰 <b>{item['current_price']}€</b>"
         img = item['image_url']
         try:
             if img and "http" in img:
@@ -272,7 +281,7 @@ async def show_user_items(user_id, message_obj):
         except: pass
     
     kb_menu = InlineKeyboardMarkup(inline_keyboard=menu_principal)
-    await message_obj.answer("👇 <b>¿Qué quieres hacer ahora?</b>", reply_markup=kb_menu, parse_mode="HTML")
+    await message_obj.answer("👇 <b>Menú:</b>", reply_markup=kb_menu, parse_mode="HTML")
 
 async def show_top_deals(message_obj):
     deals = await database.get_top_deals(5)
@@ -299,7 +308,7 @@ async def show_top_deals(message_obj):
                 await message_obj.answer(caption, parse_mode="HTML", reply_markup=kb)
         except: pass
     kb_menu = InlineKeyboardMarkup(inline_keyboard=menu_principal)
-    await message_obj.answer("👇 <b>Menú Principal:</b>", reply_markup=kb_menu, parse_mode="HTML")
+    await message_obj.answer("👇 <b>Menú:</b>", reply_markup=kb_menu, parse_mode="HTML")
 
 # --- CORE ---
 @dp.message() 
@@ -335,7 +344,7 @@ async def handle_message(message: types.Message):
                 actual = item['price']
                 original = item.get('original_price', actual)
                 safe_name = html.escape(item['name'])
-                link_money = monetizar_url(item['url'])
+                link_money = monetizar_url(item['url']) # Link monetizado
 
                 if original > actual:
                     pct = int((original - actual) / original * 100)
@@ -359,12 +368,17 @@ async def handle_message(message: types.Message):
 
         # === PRODUCTO SUELTO ===
         else:
-            title, price, original_price, is_deal, currency, image_url = await scraper.get_amazon_price(text)
+            # Scraper devuelve 7 valores
+            data = await scraper.get_amazon_price(text)
             anim_task.cancel()
             
-            if title and price > 0:
-                await database.add_product(user_id, text, title, price, image_url=image_url)
-                link_money = monetizar_url(text)
+            if data and data[1] > 0:
+                title, price, original_price, is_deal, currency, image_url, final_url = data
+                
+                # Guardamos la URL FINAL para evitar acortadores
+                await database.add_product(user_id, final_url, title, price, image_url=image_url)
+                
+                link_money = monetizar_url(final_url)
                 safe_title = html.escape(title)
                 
                 vis = ""
@@ -398,7 +412,7 @@ async def handle_message(message: types.Message):
         await status_msg.edit_text("❌ Error inesperado.")
 
 async def main():
-    print("🤖 BOT COMPLETO (LEGAL & ANTI-BAN) INICIADO...")
+    print("🤖 BOT FINAL (ANTI-CORTOS + BORRAR TODO) INICIADO...")
     await database.init_db()
     scheduler.add_job(check_price_updates, 'interval', minutes=60) 
     scheduler.start()

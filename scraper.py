@@ -4,29 +4,26 @@ from playwright.async_api import async_playwright
 import re
 from urllib.parse import urlparse
 
-# --- LISTA ROTATIVA DE AGENTES (Para que Amazon no nos reconozca) ---
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/119.0",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Edge/118.0.2088.61"
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36"
 ]
 
 async def get_random_ua():
     return random.choice(USER_AGENTS)
 
 async def random_sleep():
-    """Espera humana aleatoria para no parecer robot."""
     await asyncio.sleep(random.uniform(1.5, 3.5))
 
 async def get_amazon_price(url):
+    """
+    Devuelve: (Título, Precio, Original, Oferta, Moneda, Imagen, URL_FINAL)
+    """
     async with async_playwright() as p:
-        # Usamos un agente aleatorio cada vez
         ua = await get_random_ua()
         browser = await p.chromium.launch(headless=True)
-        
-        # Añadimos argumentos para evitar detección de bot
         context = await browser.new_context(
             user_agent=ua,
             viewport={'width': 1920, 'height': 1080},
@@ -35,10 +32,13 @@ async def get_amazon_price(url):
         page = await context.new_page()
 
         try:
-            # Timeout más largo por seguridad
+            # Navegamos y esperamos a que se resuelvan redirecciones
             await page.goto(url, timeout=90000)
-            await random_sleep() # Pausa humana
+            await random_sleep()
             
+            # CAPTURAMOS LA URL REAL (Resuelta)
+            final_url = page.url 
+
             try: title = await page.inner_text("#productTitle", timeout=5000)
             except: title = "Producto Amazon"
 
@@ -65,12 +65,14 @@ async def get_amazon_price(url):
             except: pass
 
             await browser.close()
-            return title.strip(), price, original_price, is_deal, currency, image_url
+            # Devolvemos final_url al final
+            return title.strip(), price, original_price, is_deal, currency, image_url, final_url
 
         except Exception as e:
-            print(f"⚠️ Escudo Anti-Bot activado o error: {e}")
+            print(f"⚠️ Error Scraper: {e}")
             await browser.close()
-            return None, 0.0, 0.0, False, "€", ""
+            # Si falla, devolvemos la URL original como fallback
+            return None, 0.0, 0.0, False, "€", "", url
 
 async def get_wishlist_items(url):
     items_found = []
@@ -84,14 +86,14 @@ async def get_wishlist_items(url):
         page = await context.new_page()
         
         try:
-            print(f"📖 Leyendo Wishlist: {url}")
+            print(f"📖 Wishlist: {url}")
             await page.goto(url, timeout=90000)
             await random_sleep()
             
             previous_height = 0
             for _ in range(8): 
                 await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-                await asyncio.sleep(random.uniform(1.5, 3.0)) # Scroll humano
+                await asyncio.sleep(random.uniform(1.5, 3.0))
                 new_height = await page.evaluate("document.body.scrollHeight")
                 if new_height == previous_height: break
                 previous_height = new_height
@@ -111,7 +113,6 @@ async def get_wishlist_items(url):
 
                     price = 0.0
                     currency = "€"
-                    
                     try:
                         sym = await el.locator(".a-price-symbol").first.inner_text()
                         if sym: currency = sym
@@ -150,7 +151,6 @@ async def get_wishlist_items(url):
                             "currency": currency.strip(),
                             "image_url": img_url
                         })
-
                 except Exception: continue 
 
             await browser.close()
@@ -161,7 +161,6 @@ async def get_wishlist_items(url):
             await browser.close()
             return []
 
-# --- HELPERS ---
 async def _extract_price_data(page):
     price = 0.0
     currency = "€"

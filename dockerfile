@@ -1,23 +1,24 @@
+# Usamos Python ligero normal
 FROM python:3.10-slim
 
-# 1. Instalar herramientas del sistema
+# 1. Instalar herramientas básicas del sistema
 RUN apt-get update && apt-get install -y \
     wget \
     gnupg \
     && rm -rf /var/lib/apt/lists/*
 
-# 2. Preparar carpeta
+# 2. Preparar carpeta de trabajo
 WORKDIR /app
 
-# 3. Copiar tus archivos
+# 3. Copiar tus archivos al servidor
 COPY . .
 
-# 4. Instalar librerías de Python
+# 4. Instalar las librerías de tu requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 5. INSTALAR NAVEGADORES (CRÍTICO PARA TU BOT)
-RUN playwright install chromium
-RUN playwright install-deps
+# 5. ¡ESTO ES LO QUE ARREGLA EL ERROR!
+# Forzamos la instalación de Chromium y sus dependencias de Linux
+RUN playwright install --with-deps chromium
 
 # 6. Arrancar el bot
 CMD ["python", "main.py"]
