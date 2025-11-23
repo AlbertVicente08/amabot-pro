@@ -31,7 +31,7 @@ def monetizar_url(url):
         return urlunparse((parsed.scheme, parsed.netloc, parsed.path, parsed.params, new_query, parsed.fragment))
     except: return url
 
-def generar_barra(progreso, total=10):
+def generar_barra(progreso, total=10): 
     llenos = int(progreso / 100 * total)
     vacios = total - llenos
     return "█" * llenos + "▒" * vacios

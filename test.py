@@ -26,4 +26,4 @@ async def test_connection():
     await bot.session.close()
 
 if __name__ == "__main__":
-    asyncio.run(test_connection())
+    asyncio.run(test_connection()) 
