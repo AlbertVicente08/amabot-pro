@@ -1,48 +1,30 @@
-# Usamos Python 3.10 ligero
+# 1. Usamos una base limpia de Python
 FROM python:3.10-slim
 
-# 1. INSTALAR HERRAMIENTAS DE SISTEMA (CRÍTICO)
-# Añadimos 'build-essential' y 'python3-dev' para poder compilar las librerías que fallaban
+# 2. Definimos dónde se guardarán los navegadores para que no se pierdan
+ENV PLAYWRIGHT_BROWSERS_PATH=/app/pw-browsers
+
+# 3. Instalamos las herramientas básicas de Linux
 RUN apt-get update && apt-get install -y \
     wget \
     gnupg \
-    build-essential \
-    python3-dev \
-    libglib2.0-0 \
-    libnss3 \
-    libnspr4 \
-    libatk1.0-0 \
-    libatk-bridge2.0-0 \
-    libcups2 \
-    libdrm2 \
-    libdbus-1-3 \
-    libxcb1 \
-    libxkbcommon0 \
-    libx11-6 \
-    libxcomposite1 \
-    libxdamage1 \
-    libxext6 \
-    libxfixes3 \
-    libxrandr2 \
-    libgbm1 \
-    libpango-1.0-0 \
-    libcairo2 \
-    libasound2 \
+    curl \
+    unzip \
     && rm -rf /var/lib/apt/lists/*
 
-# 2. Preparar carpeta
+# 4. Preparamos la carpeta
 WORKDIR /app
 
-# 3. Copiar archivos
+# 5. Copiamos los archivos
 COPY . .
 
-# 4. Instalar librerías de Python
-# Actualizamos pip primero para evitar errores viejos
+# 6. Instalamos las librerías de Python (incluyendo Playwright 1.44.0)
 RUN pip install --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 5. Instalar navegador Chromium para el bot
-RUN playwright install chromium
+# 7. ¡PASO CRÍTICO! Instalamos el navegador y las dependencias del sistema
+# Usamos 'python -m' para asegurar que usamos el playwright correcto
+RUN python -m playwright install --with-deps chromium
 
-# 6. Arrancar
+# 8. Arrancamos el bot
 CMD ["python", "main.py"]

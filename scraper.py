@@ -25,8 +25,8 @@ async def get_amazon_price(url):
         ua = await get_random_ua()
         # ... dentro de get_amazon_price y get_wishlist_items ...
         browser = await p.chromium.launch(
-            headless=True, 
-            args=['--no-sandbox', '--disable-setuid-sandbox'] # <--- ESTO ES VITAL EN SERVIDORES
+            headless=True,
+            args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"]
         )
         context = await browser.new_context(
             user_agent=ua,
