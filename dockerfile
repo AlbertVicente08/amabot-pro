@@ -1,24 +1,20 @@
-# Usamos Python ligero normal
-FROM python:3.10-slim
+# 1. Usamos la imagen OFICIAL de Playwright (Hecha por Microsoft)
+# Esta imagen ya trae Python, Chromium, Firefox y todas las dependencias de sistema.
+FROM mcr.microsoft.com/playwright/python:v1.40.0-jammy
 
-# 1. Instalar herramientas básicas del sistema
-RUN apt-get update && apt-get install -y \
-    wget \
-    gnupg \
-    && rm -rf /var/lib/apt/lists/*
-
-# 2. Preparar carpeta de trabajo
+# 2. Preparamos la carpeta
 WORKDIR /app
 
-# 3. Copiar tus archivos al servidor
+# 3. Copiamos tus archivos
 COPY . .
 
-# 4. Instalar las librerías de tu requirements.txt
+# 4. Instalamos las librerías de tu bot (aiogram, etc.)
+RUN pip install --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 5. ¡ESTO ES LO QUE ARREGLA EL ERROR!
-# Forzamos la instalación de Chromium y sus dependencias de Linux
-RUN playwright install --with-deps chromium
+# 5. Por seguridad, ejecutamos la instalación de drivers una vez más
+# (Aunque la imagen ya los trae, esto asegura que estén linkeados)
+RUN playwright install chromium
 
-# 6. Arrancar el bot
+# 6. Arrancamos el bot
 CMD ["python", "main.py"]
