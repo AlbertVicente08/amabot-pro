@@ -23,7 +23,11 @@ async def get_amazon_price(url):
     """
     async with async_playwright() as p:
         ua = await get_random_ua()
-        browser = await p.chromium.launch(headless=True)
+        # ... dentro de get_amazon_price y get_wishlist_items ...
+        browser = await p.chromium.launch(
+            headless=True, 
+            args=['--no-sandbox', '--disable-setuid-sandbox'] # <--- ESTO ES VITAL EN SERVIDORES
+        )
         context = await browser.new_context(
             user_agent=ua,
             viewport={'width': 1920, 'height': 1080},
