@@ -8,32 +8,6 @@ import traceback
 from urllib.parse import urlparse, urlunparse, parse_qsl, urlencode
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, BufferedInputFile
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-
-import database
-import scraper
-
-# ================= DATOS REALES =================
-TOKEN = "8570507078:AAHXOnOxZW5RG1TQFwbl76omrMkQTJlENW4"
-ADMIN_ID = 123456789
-
-PUBLIC_CHANNEL = "@ChollosVipAmazon"
-MIN_DISCOUNT_TO_POST = 30
-
-AFFILIATE_TAGS = {
-    "amazon.es": "berto010708-21",       
-    "amazon.com": "berto010708-20",      
-    "amazon.de": "berto01070803-21",      
-    "amazon.co.uk": "berto010700c4-21",
-    "amazon.it": "berto010700f7-21",
-    "amazon.fr": "berto01070807-21"
-}
-# ================================================
-
-logging.basicConfig(level=logging.INFO)
-bot = Bot(token=TOKEN)
-dp = Dispatcher()
 scheduler = AsyncIOScheduler()
 plt.switch_backend('Agg')
 
