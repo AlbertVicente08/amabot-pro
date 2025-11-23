@@ -1,30 +1,20 @@
-# 1. Usamos una base limpia de Python
-FROM python:3.10-slim
+# Usamos la imagen oficial de Playwright con Python 3.10 (Estable y compatible)
+FROM mcr.microsoft.com/playwright/python:v1.40.0-jammy
 
-# 2. Definimos dónde se guardarán los navegadores para que no se pierdan
-ENV PLAYWRIGHT_BROWSERS_PATH=/app/pw-browsers
-
-# 3. Instalamos las herramientas básicas de Linux
-RUN apt-get update && apt-get install -y \
-    wget \
-    gnupg \
-    curl \
-    unzip \
-    && rm -rf /var/lib/apt/lists/*
-
-# 4. Preparamos la carpeta
+# Preparamos la carpeta
 WORKDIR /app
 
-# 5. Copiamos los archivos
+# Copiamos tus archivos
 COPY . .
 
-# 6. Instalamos las librerías de Python (incluyendo Playwright 1.44.0)
+# Instalamos las librerías
+# (Al ser Python 3.10, descargará los 'wheels' ya hechos y no fallará compilando)
 RUN pip install --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 7. ¡PASO CRÍTICO! Instalamos el navegador y las dependencias del sistema
-# Usamos 'python -m' para asegurar que usamos el playwright correcto
-RUN python -m playwright install --with-deps chromium
+# Re-instalamos dependencias de navegador por seguridad
+RUN playwright install chromium
+RUN playwright install-deps
 
-# 8. Arrancamos el bot
+# Arrancamos
 CMD ["python", "main.py"]
